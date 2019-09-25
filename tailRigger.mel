@@ -1,0 +1,47 @@
+global proc tailRigger(int $spacing){
+    global string $CTRL[];
+    global string $GRP[];
+    global string $Offset[];
+    string $joint[];
+    
+    //TODO: selection filtering, only work on type=joints
+    select -hierarchy;
+    $joint = `ls -selection`;
+    $len = size($joint);
+    
+    for ($i=0; $i<size($joint)-1; ++$i){ //size-1 to skip last joint in array
+        makeCTRL($joint[$i], $i, $spacing); //make the controllers
+        }
+        
+    //clear the arrays
+    clear $joint $CTRL $GRP $Offset;
+}
+        
+proc makeCTRL(string $joint, int $i, int $spacing){
+    global string $CTRL[];
+    global string $GRP[];
+    global string $Offset[];
+    //define circle radius, and make the first and every n'th controller larger
+    int $radius;
+        if      ($i == 0) $radius = 20;
+        else if ($i == $spacing) $radius = 20;
+        else     $radius = 10;
+    
+    //NURBS controllers
+    circle -n ($joint + "_CTRL") -nr 1 0 0 -r $radius;
+    appendStringArray($CTRL, `ls -selection`, 1);
+
+    //Parent group for incoming transforms
+    doGroup 0 1 1; rename ($joint + "_GRP");
+    appendStringArray($GRP, `ls -selection`, 1);
+    
+    //Parent group for transform offset (so 0 transform on CTRL isn't in world space)
+    doGroup 0 1 1; rename ($joint + "_Offset");
+    matchTransform -pos -rot `ls -selection` $joint;
+    appendStringArray($Offset, `ls -selection`, 1);
+    
+    //debug
+    print( $joint + " || " + $CTRL[$i] + " || " + $GRP[$i] + " || " + $Offset[$i] + "\n");
+}
+
+tailRigger(3);
