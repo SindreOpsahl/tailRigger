@@ -1,47 +1,100 @@
+//TODO: make it use only local variables, global is a hack
 global proc tailRigger(int $spacing){
     global string $CTRL[];
     global string $GRP[];
     global string $Offset[];
-    string $joint[];
+    global string $Joint[];
     
     //TODO: selection filtering, only work on type=joints
     select -hierarchy;
-    $joint = `ls -selection`;
-    $len = size($joint);
+    $Joint = `ls -selection`;
     
-    for ($i=0; $i<size($joint)-1; ++$i){ //size-1 to skip last joint in array
-        makeCTRL($joint[$i], $i, $spacing); //make the controllers
-        }
-        
-    //clear the arrays
-    clear $joint $CTRL $GRP $Offset;
+    makeCTRL($spacing); //make the controllers
+    setupHierarchy(); //parent the controllers in a chain
+    setupRig(); //connect controllers to joints
+    
+    //TEMP just selecting the controllers for display
+    select $CTRL;
+    select -tgl $CTRL[0];
+    select -tgl $CTRL[0];
+    
+    //clear the global arrays
+    clear $Joint $CTRL $GRP $Offset;
+}
+
+proc setupRig(){
+    global string $CTRL[];
+    global string $GRP[];
+    global string $Joint[];
+    string $Cluster[];
+    int $endJoint = size($Joint) -2;
+    
+    //create IK spline
+    ikHandle -sj $Joint[0] -ee $Joint[$endJoint] -sol ikSplineSolver -scv false -pcv false;
+    //get CV's in spline
+    $sel = `ls -sl`;
+    $spline = `listConnections -shapes true -type "nurbsCurve" $sel`;
+    int $degree = getAttr ($spline[0] + ".degree");
+    int $spans = getAttr ($spline[0] + ".spans");
+    int $cvs = ($degree + $spans);
+    //make clusters for CV's
+    for ($x = 0; $x < $cvs; $x++){
+        cluster ($spline[0] + ".cv[" + $x + "]");
+        appendStringArray($Cluster, `ls -selection`, 1); 
+    }
+    //constrain clusters to controllers
+    //first two clusters are constrained to first controller
+    parentConstraint -mo $CTRL[0] $Cluster[0];
+    parentConstraint -mo $CTRL[0] $Cluster[1];
+    //clusters in between
+    for ($i=2; $i<size($CTRL); ++$i){
+        parentConstraint -mo $CTRL[$i-1] $Cluster[$i];
+    }
+    //last two clusters and last joint are constrained to last controller
+    parentConstraint -mo $CTRL[size($CTRL)-1] $Cluster[size($Cluster)-1];
+    parentConstraint -mo $CTRL[size($CTRL)-1] $Cluster[size($Cluster)-2];
+    orientConstraint -mo $CTRL[size($CTRL)-1] $Joint[size($Joint)-2];
+}
+
+proc setupHierarchy(){
+    global string $CTRL[];
+    global string $Offset[];
+    
+    for ($i=1; $i<size($Offset); ++$i){
+        parent $Offset[$i] $CTRL[$i-1]; //parent the Offset group to the Controller before it
+    }
 }
         
-proc makeCTRL(string $joint, int $i, int $spacing){
+proc makeCTRL(int $spacing){
     global string $CTRL[];
     global string $GRP[];
     global string $Offset[];
-    //define circle radius, and make the first and every n'th controller larger
+    global string $Joint[];
     int $radius;
+        
+    for ($i=0; $i<size($Joint)-1; ++$i){ //size-1 to skip last joint in array
+        //make the first and every n'th controller larger        
         if      ($i == 0) $radius = 20;
-        else if ($i == $spacing) $radius = 20;
+        else if ($i % $spacing == $spacing-1) $radius = 20;
         else     $radius = 10;
+        
+        //TODO: MakeController proc so I can put it outside and inside the loop
+        //NURBS controllers
+        circle -n ($Joint[$i] + "_CTRL") -nr 1 0 0 -r $radius;
+        appendStringArray($CTRL, `ls -selection`, 1);
     
-    //NURBS controllers
-    circle -n ($joint + "_CTRL") -nr 1 0 0 -r $radius;
-    appendStringArray($CTRL, `ls -selection`, 1);
-
-    //Parent group for incoming transforms
-    doGroup 0 1 1; rename ($joint + "_GRP");
-    appendStringArray($GRP, `ls -selection`, 1);
-    
-    //Parent group for transform offset (so 0 transform on CTRL isn't in world space)
-    doGroup 0 1 1; rename ($joint + "_Offset");
-    matchTransform -pos -rot `ls -selection` $joint;
-    appendStringArray($Offset, `ls -selection`, 1);
-    
-    //debug
-    print( $joint + " || " + $CTRL[$i] + " || " + $GRP[$i] + " || " + $Offset[$i] + "\n");
+        //Parent group for incoming transforms
+        doGroup 0 1 1; rename ($Joint[$i] + "_GRP");
+        appendStringArray($GRP, `ls -selection`, 1);
+        
+        //Parent group for transform offset (so 0 transform on CTRL isn't in world space)
+        doGroup 0 1 1; rename ($Joint[$i] + "_Offset");
+        matchTransform -pos -rot `ls -selection` $Joint[$i];
+        appendStringArray($Offset, `ls -selection`, 1);
+        
+        //debug
+        print( $Joint[$i] + " || " + $CTRL[$i] + " || " + $GRP[$i] + " || " + $Offset[$i] + "\n");
+    }
 }
 
 tailRigger(3);
