@@ -1,4 +1,19 @@
-tailRigger(3, 40, 20, 0);
+tailRiggerGUI();
+global proc tailRiggerGUI(){
+    if (`window -ex tailRiggerWin` != true){
+        string $window = `window -title "Tail Rigger" -widthHeight 200 100 tailRiggerWin`;
+    	columnLayout;
+    	
+            intField -v 3;
+            floatField -v 20;
+    		floatField -v 10;
+    		button -label "Run" -command "tailRigger(3, 20, 10, 0)";
+    
+    	showWindow $window;
+	}
+}
+
+//tailRigger(3, 20, 10, 0);
 
 global proc tailRigger(int $spacing, float $radius1, float $radius2, int $debug){
     string $CTRL[];
@@ -53,7 +68,7 @@ proc setupCTRL(string $CTRL[], string $GRP[], string $Offset[],int $debug, int $
         if($i % $spacing == 0){
             //create mul/div node and connect large control rotation to input
             shadingNode -asUtility multiplyDivide;
-            $mulNode = `ls -sl`;
+            $mulNode = `ls -selection`;
             connectAttr -f ($CTRL[$i]+".rotate") ($mulNode[0]+".input1");
             /*//divide equally to each controller
             setAttr ($mulNode[0]+".operation") 2; //set mode to divide
@@ -61,14 +76,14 @@ proc setupCTRL(string $CTRL[], string $GRP[], string $Offset[],int $debug, int $
             setAttr ($mulNode[0]+".input2") $n $n $n; */
             //connect mul/div node output to in-between controllers
             for ($x=0; $x<$spacing; ++$x){
-                if ($x+$i == size($GRP)) break;
+                if ($x+$i == size($GRP)) break; //prevent overflow
                 if($debug) print($i+" rotation: "+$CTRL[$i]+" >> "+$GRP[$i+$x] +"\n");
                 connectAttr -f ($mulNode[0]+".output") ($GRP[$i+$x]+".rotate");
             }
         };
         if($debug) print($i+" --translate: "+$CTRL[$i]+" >> "+$GRP[$i+1] +"\n");
         shadingNode -asUtility multiplyDivide;
-        $mulNode = `ls -sl`;
+        $mulNode = `ls -selection`;
         setAttr ($mulNode[0]+".input2") -1 -1 -1;
         connectAttr -f ($CTRL[$i]+".translate") ($mulNode[0]+".input1");
         connectAttr -f ($mulNode[0]+".output") ($GRP[$i+1]+".translate");
@@ -82,8 +97,8 @@ proc setupRig(string $CTRL[], string $GRP[], string $Joint[], int $debug){
     int $endJoint = size($Joint) -2;
     ikHandle -sj $Joint[0] -ee $Joint[$endJoint] -sol ikSplineSolver -scv false -pcv false;
     //get CV's in spline
-    $sel = `ls -sl`;
-    $spline = `listConnections -shapes true -type "nurbsCurve" $sel`;
+    $sel = `ls -selection`;
+    $spline = `listConnections -shapes true -type "nurbsCurve" $sel`; //get the spline curve
     int $degree = getAttr ($spline[0] + ".degree");
     int $spans = getAttr ($spline[0] + ".spans");
     int $cvs = ($degree + $spans);
