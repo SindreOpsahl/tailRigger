@@ -1,22 +1,22 @@
+tailRigger(3);
+
 //TODO: make it use only local variables, global is a hack
 global proc tailRigger(int $spacing){
     global string $CTRL[];
     global string $GRP[];
     global string $Offset[];
     global string $Joint[];
+    global int $debug = 0;
     
     //TODO: selection filtering, only work on type=joints
     select -hierarchy;
     $Joint = `ls -selection`;
     
     makeCTRL($spacing); //make the controllers
-    setupHierarchy(); //parent the controllers in a chain
-    setupRig(); //connect controllers to joints
+    setupCTRL($spacing); //set up translate and rotate interpolation on controllers
+    setupRig(); //create IK spline and connect controllers
     
-    //TEMP just selecting the controllers for display
-    select $CTRL;
-    select -tgl $CTRL[0];
-    select -tgl $CTRL[0];
+    select -r $CTRL[0];
     
     //clear the global arrays
     clear $Joint $CTRL $GRP $Offset;
@@ -27,9 +27,10 @@ proc setupRig(){
     global string $GRP[];
     global string $Joint[];
     string $Cluster[];
-    int $endJoint = size($Joint) -2;
+    global int $debug;
     
-    //create IK spline
+    //---create IK spline---//
+    int $endJoint = size($Joint) -2;
     ikHandle -sj $Joint[0] -ee $Joint[$endJoint] -sol ikSplineSolver -scv false -pcv false;
     //get CV's in spline
     $sel = `ls -sl`;
@@ -53,15 +54,40 @@ proc setupRig(){
     //last two clusters and last joint are constrained to last controller
     parentConstraint -mo $CTRL[size($CTRL)-1] $Cluster[size($Cluster)-1];
     parentConstraint -mo $CTRL[size($CTRL)-1] $Cluster[size($Cluster)-2];
-    orientConstraint -mo $CTRL[size($CTRL)-1] $Joint[size($Joint)-2];
+    orientConstraint -mo $CTRL[size($CTRL)-1] $Joint[size($Joint)-2];  
 }
 
-proc setupHierarchy(){
+proc setupCTRL(int $spacing){
     global string $CTRL[];
+    global string $GRP[];
     global string $Offset[];
+    global int $debug;
     
-    for ($i=1; $i<size($Offset); ++$i){
-        parent $Offset[$i] $CTRL[$i-1]; //parent the Offset group to the Controller before it
+    //--set up rotation and translate interpolation--//
+    for ($i=0; $i<size($CTRL)-1; ++$i){ //size-1 to skip last joint in array
+        //set up rotation interpolation from large controllers to smaller in-between controllers
+        if($i % $spacing == 0){
+            //create mul/div node and connect large control rotation to input
+            shadingNode -asUtility multiplyDivide;
+            $mulNode = `ls -sl`;
+            connectAttr -f ($CTRL[$i]+".rotate") ($mulNode[0]+".input1");
+            /*//divide equally to each controller
+            setAttr ($mulNode[0]+".operation") 2; //set mode to divide
+            $n = $spacing -1;
+            setAttr ($mulNode[0]+".input2") $n $n $n; */
+            //connect mul/div node output to in-between controllers
+            for ($x=0; $x<$spacing; ++$x){
+                if ($x+$i == size($GRP)) break;
+                if($debug) print($i+" rotation: "+$CTRL[$i]+" >> "+$GRP[$i+$x] +"\n");
+                connectAttr -f ($mulNode[0]+".output") ($GRP[$i+$x]+".rotate");
+            }
+        };
+        if($debug) print($i+" translate: "+$CTRL[$i]+" >> "+$GRP[$i+1] +"\n");
+        shadingNode -asUtility multiplyDivide;
+        $mulNode = `ls -sl`;
+        setAttr ($mulNode[0]+".input2") -1 -1 -1;
+        connectAttr -f ($CTRL[$i]+".translate") ($mulNode[0]+".input1");
+        connectAttr -f ($mulNode[0]+".output") ($GRP[$i+1]+".translate");
     }
 }
         
@@ -70,16 +96,15 @@ proc makeCTRL(int $spacing){
     global string $GRP[];
     global string $Offset[];
     global string $Joint[];
+    global int $debug;
     int $radius;
         
     for ($i=0; $i<size($Joint)-1; ++$i){ //size-1 to skip last joint in array
         //make the first and every n'th controller larger        
-        if      ($i == 0) $radius = 20;
-        else if ($i % $spacing == $spacing-1) $radius = 20;
+        if      ($i % $spacing == 0) $radius = 20;
         else     $radius = 10;
         
-        //TODO: MakeController proc so I can put it outside and inside the loop
-        //NURBS controllers
+        //NURBS circle controller
         circle -n ($Joint[$i] + "_CTRL") -nr 1 0 0 -r $radius;
         appendStringArray($CTRL, `ls -selection`, 1);
     
@@ -93,8 +118,11 @@ proc makeCTRL(int $spacing){
         appendStringArray($Offset, `ls -selection`, 1);
         
         //debug
-        print( $Joint[$i] + " || " + $CTRL[$i] + " || " + $GRP[$i] + " || " + $Offset[$i] + "\n");
+        if($debug) print( $Joint[$i] + " || " + $CTRL[$i] + " || " + $GRP[$i] + " || " + $Offset[$i] + "\n");
+    }
+    
+    //parent the Offset group to the Controller before it to make hierarchy
+    for ($i=1; $i<size($Offset); ++$i){
+        parent $Offset[$i] $CTRL[$i-1]; 
     }
 }
-
-tailRigger(3);
