@@ -1,3 +1,6 @@
+//TODO: connect end controller rotation to IK spline twist
+//TODO: selection filtering
+//TODO: Prepare for distribution, let other users load it from scripts folder
 tailRiggerGUI();
 global proc tailRiggerGUI(){
     if (`window -ex tailRiggerWin` == true){
