@@ -1,4 +1,3 @@
-//TODO: connect end controller rotation to IK spline twist
 //TODO: selection filtering
 //TODO: Prepare for distribution, let other users load it from scripts folder
 tailRiggerGUI();
@@ -115,8 +114,8 @@ proc setupRig(string $CTRL[], string $GRP[], string $Joint[], int $debug){
     int $endJoint = size($Joint) -2;
     ikHandle -sj $Joint[0] -ee $Joint[$endJoint] -sol ikSplineSolver -scv false -pcv false;
     //get CV's in spline
-    $sel = `ls -selection`;
-    $spline = `listConnections -shapes true -type "nurbsCurve" $sel`; //get the spline curve
+    $handle = `ls -selection`;
+    $spline = `listConnections -shapes true -type "nurbsCurve" $handle`; //get the spline curve
     int $degree = getAttr ($spline[0] + ".degree");
     int $spans = getAttr ($spline[0] + ".spans");
     int $cvs = ($degree + $spans);
@@ -136,5 +135,12 @@ proc setupRig(string $CTRL[], string $GRP[], string $Joint[], int $debug){
     //last two clusters and last joint are constrained to last controller
     parentConstraint -mo $CTRL[size($CTRL)-1] $Cluster[size($Cluster)-1];
     parentConstraint -mo $CTRL[size($CTRL)-1] $Cluster[size($Cluster)-2];
-    orientConstraint -mo $CTRL[size($CTRL)-1] $Joint[size($Joint)-2];  
+    orientConstraint -mo $CTRL[size($CTRL)-1] $Joint[size($Joint)-2];
+    //connect last controller's X rotation to the IK twist
+    connectAttr -f ($CTRL[size($CTRL)-1]+".rotateX") ($handle[0]+".twist");
+    
+    //clean up
+    $group = `group -n "Solvers_GRP" $Cluster`;
+    parent $handle $group;
+    parent $spline $group;
 }
