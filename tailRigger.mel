@@ -1,19 +1,35 @@
 tailRiggerGUI();
 global proc tailRiggerGUI(){
-    if (`window -ex tailRiggerWin` != true){
-        string $window = `window -title "Tail Rigger" -widthHeight 200 100 tailRiggerWin`;
-    	columnLayout;
-    	
-            intField -v 3;
-            floatField -v 20;
-    		floatField -v 10;
-    		button -label "Run" -command "tailRigger(3, 20, 10, 0)";
+    if (`window -ex tailRiggerWin` == true){
+        deleteUI -window tailRiggerWin;
+        }
+    global string $spacingField;
+    global string $radius1Field;
+    global string $radius2Field;
     
-    	showWindow $window;
-	}
+    string $window = `window -tbm 0 -title "Tail Rigger" -s 0 -widthHeight 130 200 tailRiggerWin`;
+	columnLayout;
+	    
+	    text -label "Main Control Spacing";
+        $spacingField = `intField -v 3 -w 130`;
+        text -label "Main Control Size";
+        $radius1Field = `floatField -v 20 -w 130 -pre 2`;
+        text -label "Secondary Control Size";
+        $radius2Field = `floatField -v 10 -w 130 -pre 2`;
+        separator;
+		button -label "Run" -command "Run($spacingField, $radius1Field, $radius2Field)" -w 130;	
+		separator;
+		button -label "Close" -command "deleteUI -window tailRiggerWin" -w 130;	
+			
+	showWindow $window;
 }
 
-//tailRigger(3, 20, 10, 0);
+proc Run(string $spacingField, string $radius1Field, string $radius2Field){
+    int $spacingVar = `intField -q -v $spacingField`;
+    float $radius1Var = `floatField -q -v $radius1Field`;
+    float $radius2Var = `floatField -q -v $radius2Field`;
+    tailRigger($spacingVar, $radius1Var, $radius2Var, 0);
+}
 
 global proc tailRigger(int $spacing, float $radius1, float $radius2, int $debug){
     string $CTRL[];
@@ -92,7 +108,6 @@ proc setupCTRL(string $CTRL[], string $GRP[], string $Offset[],int $debug, int $
 
 proc setupRig(string $CTRL[], string $GRP[], string $Joint[], int $debug){
     string $Cluster[];
-    
     //---create IK spline---//
     int $endJoint = size($Joint) -2;
     ikHandle -sj $Joint[0] -ee $Joint[$endJoint] -sol ikSplineSolver -scv false -pcv false;
